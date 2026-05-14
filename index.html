@@ -52,6 +52,9 @@
     .scorebtn:active { outline:2px solid #7aa2ff; }
     label.check { display:flex; align-items:center; gap:8px; margin-top:10px; font-weight:700; }
     label.check input { width:auto; }
+    .warn { color:#ffb347; font-weight:700; }
+    .oos { opacity:.45; pointer-events:none; }
+    .stock-low { color:#ffb347; font-size:11px; }
   </style>
 
   <!-- Firebase (Compat) -->
@@ -130,6 +133,12 @@
             <div>
               <div class="tiny" style="margin-bottom:6px;">Notes for cooking team (optional)</div>
               <textarea id="payNotes" rows="2" placeholder="e.g. no onions, allergy info"></textarea>
+            </div>
+
+            <div>
+              <div class="tiny" style="margin-bottom:6px;">Customer allergies (optional, comma separated)</div>
+              <input id="payAllergies" placeholder="e.g. nuts, dairy, gluten" oninput="checkAllergies()">
+              <div id="allergyWarning" class="warn" style="margin-top:6px;min-height:18px;"></div>
             </div>
 
             <div>
@@ -302,6 +311,10 @@
         <input id="newItemPrice" type="number" inputmode="decimal" placeholder="Price" />
       </div>
       <input id="newItemNotes" placeholder="Notes (optional)" style="margin-top:10px;" />
+      <div class="row2" style="margin-top:10px;">
+        <input id="newItemStock" type="number" inputmode="numeric" placeholder="Stock (servings, blank = unlimited)" />
+        <input id="newItemAllergies" placeholder="Allergens (e.g. nuts, dairy)" />
+      </div>
 
       <label class="check">
         <input type="checkbox" id="newItemActivity" />
@@ -398,15 +411,20 @@ async function saveItem(){
   const price = Number($("newItemPrice").value);
   const notes = $("newItemNotes").value.trim();
   const toActivity = $("newItemActivity").checked;
+  const stockRaw = $("newItemStock").value.trim();
+  const stock = stockRaw !== "" ? Number(stockRaw) : null;
+  const allergies = $("newItemAllergies").value.trim();
   if (!name || !Number.isFinite(price)) { msg("Missing name/price"); return; }
 
+  const data = { name, price, notes, toActivity, allergies, stock };
+
   if (editItemId){
-    await db.collection("items").doc(editItemId).set({ name, price, notes, toActivity }, { merge: true });
+    await db.collection("items").doc(editItemId).set(data, { merge: true });
     msg("Item updated ✅");
     cancelItemEdit();
   } else {
     await db.collection("items").add({
-      name, price, notes, toActivity,
+      ...data,
       createdAtMs: Date.now(),
       createdAt: F.serverTimestamp()
     });
@@ -416,6 +434,8 @@ async function saveItem(){
   $("newItemName").value = "";
   $("newItemPrice").value = "";
   $("newItemNotes").value = "";
+  $("newItemStock").value = "";
+  $("newItemAllergies").value = "";
   $("newItemActivity").checked = false;
 }
 
@@ -426,6 +446,8 @@ function editItemStart(itemId){
   $("newItemName").value = it.name || "";
   $("newItemPrice").value = it.price != null ? it.price : "";
   $("newItemNotes").value = it.notes || "";
+  $("newItemStock").value = it.stock != null ? it.stock : "";
+  $("newItemAllergies").value = it.allergies || "";
   $("newItemActivity").checked = !!it.toActivity;
   $("itemSaveBtn").textContent = "Save changes";
   $("itemCancelEdit").style.display = "";
@@ -439,6 +461,8 @@ function cancelItemEdit(){
   $("newItemName").value = "";
   $("newItemPrice").value = "";
   $("newItemNotes").value = "";
+  $("newItemStock").value = "";
+  $("newItemAllergies").value = "";
   $("newItemActivity").checked = false;
 }
 
@@ -456,10 +480,16 @@ function renderMenu(){
   const grid = $("itemsGrid");
   grid.innerHTML = "";
   for (const it of items){
+    const oos = it.stock != null && it.stock <= 0;
+    const stockLabel = it.stock != null
+      ? (oos ? `<div style="color:#ff8a8a;font-size:11px;font-weight:700;">OUT OF STOCK</div>`
+             : `<div class="stock-low">${it.stock} left</div>`)
+      : "";
     const tile = document.createElement("div");
-    tile.className = "tile";
+    tile.className = "tile" + (oos ? " oos" : "");
     tile.innerHTML = `<div style="font-weight:900">${esc(it.name)}</div>
-      <div class="tiny">${money(it.price)}${it.toActivity ? " • 🎯 Activity" : ""}</div>`;
+      <div class="tiny">${money(it.price)}${it.toActivity ? " • 🎯 Activity" : ""}</div>
+      ${stockLabel}`;
     tile.onclick = () => addToCart(it.id);
     grid.appendChild(tile);
   }
@@ -469,13 +499,15 @@ function renderAdmin(){
   const list = $("itemsAdminList");
   list.innerHTML = "";
   for (const it of items){
+    const stockTxt = it.stock != null ? ` • Stock: ${it.stock}` : "";
+    const allergyTxt = it.allergies ? ` • ⚠️ ${esc(it.allergies)}` : "";
     const tile = document.createElement("div");
     tile.className = "tile";
     tile.innerHTML = `
       <div class="row">
         <div>
           <div style="font-weight:900">${esc(it.name)}</div>
-          <div class="tiny">${esc(it.notes || "")}${it.toActivity ? " • 🎯 Activity" : ""}</div>
+          <div class="tiny">${esc(it.notes || "")}${it.toActivity ? " • 🎯 Activity" : ""}${stockTxt}${allergyTxt}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <div style="font-weight:900">${money(it.price)}</div>
@@ -492,9 +524,10 @@ function renderAdmin(){
  * CART (local)
  ***********************/
 function addToCart(itemId){
+  const it = items.find(x => x.id === itemId);
+  if (it && it.stock != null && it.stock <= 0){ msg("Out of stock: " + it.name); return; }
   cart.set(itemId, (cart.get(itemId) || 0) + 1);
   renderCart();
-  const it = items.find(x => x.id === itemId);
   msg("Added to cart: " + (it ? it.name : itemId));
 }
 function incQty(itemId){
@@ -581,6 +614,8 @@ function openPay(){
   $("givenInput").value = "";
   $("payName").value = payOverride ? payOverride.name : "";
   $("payNotes").value = "";
+  $("payAllergies").value = "";
+  $("allergyWarning").textContent = "";
   $("dueAmt").textContent = money(due);
   $("changeAmt").textContent = money(0);
 
@@ -601,6 +636,26 @@ function updateChange(){
   $("changeAmt").textContent = money(Math.max(0, change));
 }
 
+function checkAllergies(){
+  const warn = $("allergyWarning");
+  const custText = $("payAllergies").value.trim();
+  if (!custText){ warn.textContent = ""; return; }
+  const custList = custText.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  const matches = [];
+  for (const [itemId] of cart.entries()){
+    const it = items.find(x => x.id === itemId);
+    if (!it || it.toActivity || !it.allergies) continue;
+    const itemAllergens = it.allergies.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    for (const a of custList){
+      if (itemAllergens.includes(a)){
+        const label = `${it.name} contains ${a}`;
+        if (!matches.includes(label)) matches.push(label);
+      }
+    }
+  }
+  warn.textContent = matches.length ? "⚠️ ALLERGY WARNING: " + matches.join(" | ") : "";
+}
+
 async function completePay(){
   if (!db) return alert("Not connected to Firebase yet.");
 
@@ -617,6 +672,7 @@ async function completePay(){
 
   const customerName = $("payName").value.trim();
   const notes = $("payNotes").value.trim();
+  const allergies = $("payAllergies").value.trim();
 
   let lines = [];
   if (payOverride){
@@ -654,6 +710,7 @@ async function completePay(){
         change: given - due,
         customerName,
         notes,
+        allergies,
         createdAtMs,
         createdAt: F.serverTimestamp(),
         readyAtMs: null,
@@ -663,13 +720,29 @@ async function completePay(){
       });
     });
 
-    // Activity items -> add players to the darts list
-    for (const l of activityLines){
-      const qty = l.qty || 1;
-      for (let i = 0; i < qty; i++){
+    // Decrement stock for non-activity items
+    for (const l of cookLines){
+      if (!l.itemId) continue;
+      const it = items.find(x => x.id === l.itemId);
+      if (it && it.stock != null){
+        await db.collection("items").doc(l.itemId).update({ stock: F.increment(-(l.qty)) });
+      }
+    }
+
+    // Activity items -> add/update darts player (dedup by name)
+    if (activityLines.length > 0){
+      const playerName = customerName || "Guest";
+      const existing = dartsPlayers.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+      if (existing){
+        // Reactivate if already done so they appear in the scoring queue again
+        if (existing.status === "done"){
+          await db.collection("dartsPlayers").doc(existing.id).set({ status: "active" }, { merge: true });
+        }
+        // If already active, nothing to do — player is already in the queue
+      } else {
         await db.collection("dartsPlayers").add({
-          name: customerName || "Guest",
-          item: l.name || "",
+          name: playerName,
+          item: activityLines.map(l => l.name).join(", "),
           points: 0,
           status: "active",
           createdAtMs: Date.now(),
@@ -696,6 +769,7 @@ function detailExtra(o){
   let s = "";
   if (o.customerName) s += `<div class="row"><span>Name</span><strong>${esc(o.customerName)}</strong></div>`;
   if (o.notes) s += `<div class="mutedbox">📝 ${esc(o.notes)}</div>`;
+  if (o.allergies) s += `<div class="mutedbox warn">⚠️ Allergies: ${esc(o.allergies)}</div>`;
   return s;
 }
 
@@ -1114,14 +1188,17 @@ async function resetDay(){
   if (!confirm("⚠️ RESET DAY will delete ALL orders and reset order numbers to 1.\n\nAre you absolutely sure?")) return;
 
   try {
-    const snap = await db.collection("orders").get();
+    const [ordersSnap, dartsSnap] = await Promise.all([
+      db.collection("orders").get(),
+      db.collection("dartsPlayers").get()
+    ]);
     const batch = db.batch();
-    snap.forEach(doc => batch.delete(doc.ref));
-    const counterRef = db.collection("meta").doc("counters");
-    batch.set(counterRef, { nextOrderNumber: 1 }, { merge: true });
+    ordersSnap.forEach(doc => batch.delete(doc.ref));
+    dartsSnap.forEach(doc => batch.delete(doc.ref));
+    batch.set(db.collection("meta").doc("counters"), { nextOrderNumber: 1 }, { merge: true });
     await batch.commit();
     msg("Day reset complete ✅");
-    alert("All orders cleared. Order numbers reset to 1.");
+    alert("All orders and darts players cleared. Order numbers reset to 1.");
   } catch (e) {
     console.error(e);
     alert("Reset failed. Check connection or rules.");
