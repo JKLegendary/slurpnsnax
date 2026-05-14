@@ -9,7 +9,7 @@
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
     body { margin:0; background:#0b0c10; color:#eaf0ff; }
     .topbar { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:#11131a; position:sticky; top:0; z-index:10; }
-    .nav { display:flex; gap:8px; }
+    .nav { display:flex; gap:8px; flex-wrap:wrap; }
     .navbtn { background:#1b1f2b; color:#eaf0ff; border:1px solid #2a3042; padding:10px 12px; border-radius:10px; font-weight:700; }
     .active { outline:2px solid #7aa2ff; }
     .app { padding:12px; padding-bottom:90px; }
@@ -32,7 +32,7 @@
     .primary { background:#7aa2ff; color:#081022; border:none; padding:12px; border-radius:12px; font-weight:900; width:100%; }
     .qtybtn { background:#1b1f2b; color:#eaf0ff; border:1px solid #2a3042; padding:8px 12px; border-radius:10px; font-weight:900; }
 
-    input { width:100%; box-sizing:border-box; padding:12px; border-radius:12px; border:1px solid #2a3042; background:#0b0c10; color:#eaf0ff; font-size:16px; }
+    input, textarea { width:100%; box-sizing:border-box; padding:12px; border-radius:12px; border:1px solid #2a3042; background:#0b0c10; color:#eaf0ff; font-size:16px; font-family:inherit; }
 
     .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:14px; z-index:50; }
     .modal-card { width:min(820px,100%); background:#11131a; border:1px solid #20243a; border-radius:14px; padding:14px; }
@@ -47,6 +47,11 @@
 
     .statusbar { position:fixed; left:0; right:0; bottom:0; padding:10px; background:#11131a; border-top:1px solid #20243a; z-index:9999; }
     .banner { font-weight:900; }
+
+    .scorebtn { background:#1b1f2b; color:#eaf0ff; border:1px solid #2a3042; padding:20px; border-radius:12px; font-weight:900; font-size:22px; }
+    .scorebtn:active { outline:2px solid #7aa2ff; }
+    label.check { display:flex; align-items:center; gap:8px; margin-top:10px; font-weight:700; }
+    label.check input { width:auto; }
   </style>
 
   <!-- Firebase (Compat) -->
@@ -61,6 +66,7 @@
       <button id="nav-cashier" class="navbtn active" onclick="showView('cashier')">Cashier</button>
       <button id="nav-cook" class="navbtn" onclick="showView('cook')">Cook</button>
       <button id="nav-history" class="navbtn" onclick="showView('history')">History</button>
+      <button id="nav-activities" class="navbtn" onclick="showView('activities')">Activities</button>
     </nav>
   </header>
 
@@ -90,7 +96,7 @@
             </div>
 
             <div style="margin-top:10px;">
-              <button class="primary" onclick="openPay()">Pay</button>
+              <button class="primary" onclick="openCartPay()">Pay</button>
             </div>
 
             <div style="margin-top:14px;">
@@ -114,6 +120,16 @@
             <div class="row" style="font-size:20px;">
               <span>Amount due</span>
               <strong id="dueAmt">£0.00</strong>
+            </div>
+
+            <div>
+              <div class="tiny" style="margin-bottom:6px;">Customer name (optional)</div>
+              <input id="payName" placeholder="Name">
+            </div>
+
+            <div>
+              <div class="tiny" style="margin-bottom:6px;">Notes for cooking team (optional)</div>
+              <textarea id="payNotes" rows="2" placeholder="e.g. no onions, allergy info"></textarea>
             </div>
 
             <div>
@@ -158,7 +174,117 @@
             <button class="ghost danger" style="width:auto;" onclick="resetDay()">RESET DAY</button>
           </div>
         </div>
+        <div class="row" style="margin-bottom:10px;">
+          <span style="font-weight:900;">Total profit</span>
+          <strong id="historyProfit" style="font-size:22px;">£0.00</strong>
+        </div>
         <div id="historyList" class="list"></div>
+      </div>
+    </section>
+
+    <!-- ACTIVITIES -->
+    <section id="view-activities" class="hidden">
+      <!-- Activities menu -->
+      <div id="activitiesMenu">
+        <div class="pane">
+          <div class="pane-head"><h2>Activities</h2></div>
+          <div class="row2">
+            <button class="primary" onclick="openActivity('darts')">🎯 Darts</button>
+            <button class="primary" onclick="openActivity('auction')">🔨 Auction</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DARTS -->
+      <div id="activitiesDarts" class="hidden">
+        <!-- darts main / leaderboard -->
+        <div id="dartsMain">
+          <div class="pane">
+            <div class="pane-head">
+              <h2>Darts Leaderboard</h2>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button class="ghost" style="width:auto;" onclick="backToActivities()">Back</button>
+                <button class="ghost" style="width:auto;padding:6px 8px;font-size:12px;" onclick="showDarts('admin')">admin</button>
+              </div>
+            </div>
+            <div id="dartsLeaderboard" class="list"></div>
+            <div style="margin-top:10px;">
+              <button class="ghost" onclick="showDarts('history')">History</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- darts admin -->
+        <div id="dartsAdminView" class="hidden">
+          <div class="pane">
+            <div class="pane-head">
+              <h2>Darts Admin</h2>
+              <div style="display:flex;gap:8px;">
+                <button class="ghost" style="width:auto;" onclick="showDarts('main')">Back</button>
+                <button class="ghost" style="width:auto;" onclick="editDartsButtons()">Edit buttons ✏️</button>
+              </div>
+            </div>
+
+            <div class="row2" style="margin-bottom:10px;">
+              <input id="newPlayerName" placeholder="Add player name" />
+              <button class="ghost" style="width:auto;" onclick="addPlayer()">Add</button>
+            </div>
+
+            <div class="tiny" style="margin-bottom:6px;">Tap a player to score</div>
+            <div id="dartsActiveList" class="list"></div>
+
+            <div id="dartsScoreEntry" class="hidden" style="margin-top:14px;">
+              <hr style="border:none;border-top:1px solid #20243a;margin:0 0 12px 0;">
+              <h3 id="scorePlayerName" style="margin:0 0 8px 0;"></h3>
+              <div class="row" style="font-size:20px;margin-bottom:10px;">
+                <span>This round</span>
+                <strong id="pendingScore">0</strong>
+              </div>
+              <div id="scoreButtons" class="grid" style="max-height:none;"></div>
+              <div class="row2" style="margin-top:12px;">
+                <button class="ghost" onclick="cancelScore()">Cancel</button>
+                <button class="ghost" onclick="resetPending()">Reset</button>
+                <button class="primary" onclick="saveDartsScore()">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- darts history -->
+        <div id="dartsHistoryView" class="hidden">
+          <div class="pane">
+            <div class="pane-head">
+              <h2>Darts History</h2>
+              <button class="ghost" style="width:auto;" onclick="showDarts('main')">Back</button>
+            </div>
+            <div id="dartsHistoryList" class="list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUCTION -->
+      <div id="activitiesAuction" class="hidden">
+        <div class="pane">
+          <div class="pane-head">
+            <h2>Auctions</h2>
+            <button class="ghost" style="width:auto;" onclick="backToActivities()">Back</button>
+          </div>
+
+          <div class="row2">
+            <input id="auctionName" placeholder="Auction name" />
+            <input id="auctionPrice" type="number" inputmode="decimal" placeholder="Start price" />
+          </div>
+          <div class="row2" style="margin-top:8px;">
+            <input id="auctionDate" type="date" />
+            <input id="auctionIncrement" type="number" inputmode="decimal" placeholder="Bid increment" />
+          </div>
+          <div style="margin-top:10px;">
+            <button class="primary" onclick="createAuction()">Create auction</button>
+          </div>
+
+          <hr style="border:none;border-top:1px solid #20243a;margin:14px 0;">
+          <div id="auctionList" class="list"></div>
+        </div>
       </div>
     </section>
   </main>
@@ -175,10 +301,16 @@
         <input id="newItemName" placeholder="Name" />
         <input id="newItemPrice" type="number" inputmode="decimal" placeholder="Price" />
       </div>
-      <input id="newItemNotes" placeholder="Notes (optional)" />
+      <input id="newItemNotes" placeholder="Notes (optional)" style="margin-top:10px;" />
 
-      <div style="margin-top:12px;">
-        <button class="primary" onclick="addItem()">Add item</button>
+      <label class="check">
+        <input type="checkbox" id="newItemActivity" />
+        Send to Activity Manager (Darts) instead of Cooks
+      </label>
+
+      <div style="margin-top:12px;" class="row2">
+        <button class="primary" id="itemSaveBtn" onclick="saveItem()">Add item</button>
+        <button class="ghost" id="itemCancelEdit" style="width:auto;display:none;" onclick="cancelItemEdit()">Cancel</button>
       </div>
 
       <hr style="border:none;border-top:1px solid #20243a;margin:14px 0;">
@@ -192,9 +324,6 @@
   </div>
 
 <script>
-/***********************
- * FIREBASE CONFIG
- ***********************/
 const firebaseConfig = {
   apiKey: "AIzaSyARBfapCjXLkhlmuTKT9lJRbLLAc6u0jU0",
   authDomain: "enterprise-d157a.firebaseapp.com",
@@ -206,33 +335,35 @@ const firebaseConfig = {
 };
 
 let db = null;
-let F = null; // FieldValue
+let F = null;
 
-/***********************
- * LOCAL UI STATE
- ***********************/
-let items = [];   // from Firestore
-let orders = [];  // from Firestore
+let items = [];
+let orders = [];
+let auctions = [];
+let dartsPlayers = [];
+let dartsButtons = [1, 3, 5, 10, 15, 20, 25, 50];
 
-// Cart stays local to each device
-const cart = new Map(); // itemId -> qty
+let editItemId = null;
+let selectedPlayerId = null;
+let pendingScore = 0;
+let payOverride = null;
+
+const cart = new Map();
 
 function $(id){ return document.getElementById(id); }
-function money(n){ return "£" + Number(n).toFixed(2); }
+function money(n){ return "£" + Number(n||0).toFixed(2); }
 function msg(s){ $("lastMsg").textContent = s; }
 function setConn(s){ $("connStatus").textContent = s; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 function showView(view){
-  ["cashier","cook","history"].forEach(v => {
+  ["cashier","cook","history","activities"].forEach(v => {
     $("view-"+v).classList.toggle("hidden", v !== view);
     $("nav-"+v).classList.toggle("active", v === view);
   });
   msg("Switched to " + view);
 }
 
-/***********************
- * MODAL
- ***********************/
 function openItems(){
   $("itemsModal").style.display = "flex";
   renderAdmin();
@@ -240,46 +371,64 @@ function openItems(){
 }
 function closeItems(){
   $("itemsModal").style.display = "none";
+  cancelItemEdit();
   msg("Closed items editor");
 }
 function modalBackdrop(e){
   if (e.target.id === "itemsModal") closeItems();
 }
 
-/***********************
- * ITEMS (Firestore)
- ***********************/
-async function addItem(){
+async function saveItem(){
   if (!db) return alert("Not connected to Firebase yet.");
-
   const name = $("newItemName").value.trim();
   const price = Number($("newItemPrice").value);
   const notes = $("newItemNotes").value.trim();
+  const toActivity = $("newItemActivity").checked;
   if (!name || !Number.isFinite(price)) { msg("Missing name/price"); return; }
-
-  const createdAtMs = Date.now();
-  await db.collection("items").add({
-    name, price, notes,
-    createdAtMs,
-    createdAt: F.serverTimestamp()
-  });
-
+  if (editItemId){
+    await db.collection("items").doc(editItemId).set({ name, price, notes, toActivity }, { merge: true });
+    msg("Item updated ✅");
+    cancelItemEdit();
+  } else {
+    await db.collection("items").add({ name, price, notes, toActivity, createdAtMs: Date.now(), createdAt: F.serverTimestamp() });
+    msg("Item added ✅");
+  }
   $("newItemName").value = "";
   $("newItemPrice").value = "";
   $("newItemNotes").value = "";
-  msg("Item added ✅");
+  $("newItemActivity").checked = false;
 }
 
-/* ✅ FIXED delete: only uses itemId */
+function editItemStart(itemId){
+  const it = items.find(x => x.id === itemId);
+  if (!it) return;
+  editItemId = itemId;
+  $("newItemName").value = it.name || "";
+  $("newItemPrice").value = it.price != null ? it.price : "";
+  $("newItemNotes").value = it.notes || "";
+  $("newItemActivity").checked = !!it.toActivity;
+  $("itemSaveBtn").textContent = "Save changes";
+  $("itemCancelEdit").style.display = "";
+  msg("Editing: " + it.name);
+}
+
+function cancelItemEdit(){
+  editItemId = null;
+  $("itemSaveBtn").textContent = "Add item";
+  $("itemCancelEdit").style.display = "none";
+  $("newItemName").value = "";
+  $("newItemPrice").value = "";
+  $("newItemNotes").value = "";
+  $("newItemActivity").checked = false;
+}
+
 async function deleteItem(itemId){
   if (!db) return;
-
   const it = items.find(x => x.id === itemId);
   const name = it ? it.name : "this item";
-
   if (!confirm(`Delete "${name}"?`)) return;
-
   await db.collection("items").doc(itemId).delete();
+  if (editItemId === itemId) cancelItemEdit();
   msg(`Deleted: ${name}`);
 }
 
@@ -289,7 +438,7 @@ function renderMenu(){
   for (const it of items){
     const tile = document.createElement("div");
     tile.className = "tile";
-    tile.innerHTML = `<div style="font-weight:900">${it.name}</div><div class="tiny">${money(it.price)}</div>`;
+    tile.innerHTML = `<div style="font-weight:900">${esc(it.name)}</div><div class="tiny">${money(it.price)}${it.toActivity ? " • 🎯 Activity" : ""}</div>`;
     tile.onclick = () => addToCart(it.id);
     grid.appendChild(tile);
   }
@@ -304,11 +453,12 @@ function renderAdmin(){
     tile.innerHTML = `
       <div class="row">
         <div>
-          <div style="font-weight:900">${it.name}</div>
-          <div class="tiny">${it.notes || ""}</div>
+          <div style="font-weight:900">${esc(it.name)}</div>
+          <div class="tiny">${esc(it.notes || "")}${it.toActivity ? " • 🎯 Activity" : ""}</div>
         </div>
-        <div style="display:flex;gap:10px;align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center;">
           <div style="font-weight:900">${money(it.price)}</div>
+          <button class="ghost" style="width:auto;" onclick="editItemStart('${it.id}')">Edit</button>
           <button class="ghost" style="width:auto;" onclick="deleteItem('${it.id}')">Delete</button>
         </div>
       </div>
@@ -317,9 +467,6 @@ function renderAdmin(){
   }
 }
 
-/***********************
- * CART (local)
- ***********************/
 function addToCart(itemId){
   cart.set(itemId, (cart.get(itemId) || 0) + 1);
   renderCart();
@@ -353,19 +500,17 @@ function renderCart(){
   const list = $("cartList");
   list.innerHTML = "";
   let total = 0;
-
   for (const [itemId, qty] of cart.entries()){
     const it = items.find(x => x.id === itemId);
     if (!it) continue;
     total += it.price * qty;
-
     const tile = document.createElement("div");
     tile.className = "tile";
     tile.innerHTML = `
       <div class="row">
         <div>
-          <div style="font-weight:900">${it.name}</div>
-          <div class="tiny">${money(it.price)} each</div>
+          <div style="font-weight:900">${esc(it.name)}</div>
+          <div class="tiny">${money(it.price)} each${it.toActivity ? " • 🎯" : ""}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="qtybtn" onclick="decQty('${itemId}')">−</button>
@@ -380,31 +525,43 @@ function renderCart(){
     `;
     list.appendChild(tile);
   }
-
   $("cartTotal").textContent = money(total);
 }
 
-/***********************
- * PAYMENT
- ***********************/
+function openCartPay(){
+  payOverride = null;
+  openPay();
+}
+function openAuctionPay(a){
+  payOverride = {
+    amount: a.currentPrice || 0,
+    lines: [{ itemId: null, name: "Auction: " + a.name, price: a.currentPrice || 0, qty: 1, toActivity: false }],
+    name: a.name ? (a.name + " (winner)") : "Auction winner"
+  };
+  showView('cashier');
+  openPay();
+}
 function openPay(){
-  if (cart.size === 0) { msg("Cart is empty"); return; }
+  const due = payOverride ? payOverride.amount : cartTotal();
+  if (!payOverride && cart.size === 0) { msg("Cart is empty"); return; }
   $("payErr").textContent = "";
   $("givenInput").value = "";
-  $("dueAmt").textContent = money(cartTotal());
+  $("payName").value = payOverride ? payOverride.name : "";
+  $("payNotes").value = "";
+  $("dueAmt").textContent = money(due);
   $("changeAmt").textContent = money(0);
-
   $("cashierMain").classList.add("hidden");
   $("cashierPay").classList.remove("hidden");
   msg("Pay opened");
 }
 function closePay(){
+  payOverride = null;
   $("cashierPay").classList.add("hidden");
   $("cashierMain").classList.remove("hidden");
   msg("Back to cashier");
 }
 function updateChange(){
-  const due = cartTotal();
+  const due = payOverride ? payOverride.amount : cartTotal();
   const given = Number($("givenInput").value);
   const change = Number.isFinite(given) ? (given - due) : 0;
   $("changeAmt").textContent = money(Math.max(0, change));
@@ -412,56 +569,56 @@ function updateChange(){
 
 async function completePay(){
   if (!db) return alert("Not connected to Firebase yet.");
-
-  const due = cartTotal();
+  const due = payOverride ? payOverride.amount : cartTotal();
   const given = Number($("givenInput").value);
-
   if (!Number.isFinite(given) || given < due){
     $("payErr").textContent = "Amount given must be at least the amount due.";
     msg("Pay error");
     return;
   }
-
-  if (!confirm("Complete payment and send order to cook?")) return;
-
-  const lines = [];
-  for (const [itemId, qty] of cart.entries()){
-    const it = items.find(x => x.id === itemId);
-    if (!it) continue;
-    lines.push({ itemId, name: it.name, price: it.price, qty });
+  if (!confirm("Complete payment?")) return;
+  const customerName = $("payName").value.trim();
+  const notes = $("payNotes").value.trim();
+  let lines = [];
+  if (payOverride){
+    lines = payOverride.lines;
+  } else {
+    for (const [itemId, qty] of cart.entries()){
+      const it = items.find(x => x.id === itemId);
+      if (!it) continue;
+      lines.push({ itemId, name: it.name, price: it.price, qty, toActivity: !!it.toActivity });
+    }
   }
-
+  const cookLines = lines.filter(l => !l.toActivity);
+  const activityLines = lines.filter(l => l.toActivity);
   const createdAtMs = Date.now();
-
+  const wasOverride = !!payOverride;
   try {
     await db.runTransaction(async (tx) => {
       const counterRef = db.collection("meta").doc("counters");
       const counterSnap = await tx.get(counterRef);
-      const next = (counterSnap.exists && Number.isFinite(counterSnap.data().nextOrderNumber))
-        ? counterSnap.data().nextOrderNumber
-        : 1;
-
+      const next = (counterSnap.exists && Number.isFinite(counterSnap.data().nextOrderNumber)) ? counterSnap.data().nextOrderNumber : 1;
       tx.set(counterRef, { nextOrderNumber: next + 1 }, { merge: true });
-
       const orderRef = db.collection("orders").doc();
       tx.set(orderRef, {
         number: next,
-        status: "COOKING",
-        lines,
-        total: due,
-        paid: given,
-        change: given - due,
-        createdAtMs,
+        status: cookLines.length > 0 ? "COOKING" : "ACTIVITY",
+        lines, total: due, paid: given, change: given - due,
+        customerName, notes, createdAtMs,
         createdAt: F.serverTimestamp(),
-        readyAtMs: null,
-        readyAt: null,
-        pickedUpAtMs: null,
-        pickedUpAt: null,
+        readyAtMs: null, readyAt: null, pickedUpAtMs: null, pickedUpAt: null
       });
     });
-
-    cart.clear();
-    renderCart();
+    for (const l of activityLines){
+      for (let i = 0; i < (l.qty || 1); i++){
+        await db.collection("dartsPlayers").add({
+          name: customerName || "Guest", item: l.name || "",
+          points: 0, status: "active",
+          createdAtMs: Date.now(), createdAt: F.serverTimestamp()
+        });
+      }
+    }
+    if (!wasOverride){ cart.clear(); renderCart(); }
     closePay();
     msg("Order confirmed ✅");
     alert("Order confirmed ✅");
@@ -472,43 +629,39 @@ async function completePay(){
   }
 }
 
-/***********************
- * ORDERS RENDERING
- ***********************/
+function detailExtra(o){
+  let s = "";
+  if (o.customerName) s += `<div class="row"><span>Name</span><strong>${esc(o.customerName)}</strong></div>`;
+  if (o.notes) s += `<div class="mutedbox">📝 ${esc(o.notes)}</div>`;
+  return s;
+}
+
 function renderCook(){
   const list = $("cookOrders");
   list.innerHTML = "";
-
-  const cooking = orders
-    .filter(o => o.status === "COOKING")
-    .sort((a,b) => (b.createdAtMs||0) - (a.createdAtMs||0));
-
+  const cooking = orders.filter(o => o.status === "COOKING").sort((a,b) => (b.createdAtMs||0) - (a.createdAtMs||0));
   for (const o of cooking){
     const tile = document.createElement("div");
     tile.className = "tile";
-
-    const linesHtml = (o.lines || []).map(l =>
-      `<div class="row"><span>${l.qty}× ${l.name}</span><span>${money(l.price*l.qty)}</span></div>`
+    const linesHtml = (o.lines || []).filter(l => !l.toActivity).map(l =>
+      `<div class="row"><span>${l.qty}× ${esc(l.name)}</span><span>${money(l.price*l.qty)}</span></div>`
     ).join("");
-
     tile.innerHTML = `
       <div class="row">
-        <div style="font-weight:900;font-size:18px;">Order #${o.number}</div>
+        <div style="font-weight:900;font-size:18px;">Order #${o.number}${o.customerName ? ' — ' + esc(o.customerName) : ''}</div>
         <button class="primary" style="width:auto;padding:10px 12px;" onclick="markReady('${o.id}', ${o.number})">✅</button>
       </div>
       <div class="tiny" style="margin-top:6px;">Tap to expand</div>
       <div id="cook-details-${o.id}" class="hidden" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
         ${linesHtml}
         <div class="row"><strong>Total</strong><strong>${money(o.total)}</strong></div>
+        ${detailExtra(o)}
       </div>
     `;
-
     tile.onclick = (ev) => {
       if (ev.target && ev.target.tagName === "BUTTON") return;
-      const d = $("cook-details-" + o.id);
-      d.classList.toggle("hidden");
+      $("cook-details-" + o.id).classList.toggle("hidden");
     };
-
     list.appendChild(tile);
   }
 }
@@ -516,11 +669,7 @@ function renderCook(){
 async function markReady(orderId, orderNumber){
   if (!db) return;
   if (!confirm("Mark Order #" + orderNumber + " as READY?")) return;
-  await db.collection("orders").doc(orderId).set({
-    status: "READY",
-    readyAtMs: Date.now(),
-    readyAt: F.serverTimestamp()
-  }, { merge: true });
+  await db.collection("orders").doc(orderId).set({ status: "READY", readyAtMs: Date.now(), readyAt: F.serverTimestamp() }, { merge: true });
   msg("Order #" + orderNumber + " READY ✅");
 }
 
@@ -528,28 +677,18 @@ function renderCashierReady(){
   const list = $("cashierReadyList");
   const empty = $("cashierReadyEmpty");
   list.innerHTML = "";
-
-  const ready = orders
-    .filter(o => o.status === "READY")
-    .sort((a,b) => (b.readyAtMs||0) - (a.readyAtMs||0));
-
-  if (ready.length === 0){
-    empty.classList.remove("hidden");
-    return;
-  }
+  const ready = orders.filter(o => o.status === "READY").sort((a,b) => (b.readyAtMs||0) - (a.readyAtMs||0));
+  if (ready.length === 0){ empty.classList.remove("hidden"); return; }
   empty.classList.add("hidden");
-
   for (const o of ready){
     const tile = document.createElement("div");
     tile.className = "tile";
-
     const linesHtml = (o.lines || []).map(l =>
-      `<div class="row"><span>${l.qty}× ${l.name}</span><span>${money(l.price*l.qty)}</span></div>`
+      `<div class="row"><span>${l.qty}× ${esc(l.name)}</span><span>${money(l.price*l.qty)}</span></div>`
     ).join("");
-
     tile.innerHTML = `
       <div class="row">
-        <div style="font-weight:900;font-size:18px;">Order #${o.number}</div>
+        <div style="font-weight:900;font-size:18px;">Order #${o.number}${o.customerName ? ' — ' + esc(o.customerName) : ''}</div>
         <button class="primary" style="width:auto;padding:10px 12px;" onclick="markTaken('${o.id}', ${o.number})">✅</button>
       </div>
       <div class="tiny" style="margin-top:6px;">Tap to expand • ✅ = Taken</div>
@@ -557,15 +696,13 @@ function renderCashierReady(){
         ${linesHtml}
         <div class="row"><strong>Total</strong><strong>${money(o.total)}</strong></div>
         <div class="tiny">Paid ${money(o.paid)} • Change ${money(o.change)}</div>
+        ${detailExtra(o)}
       </div>
     `;
-
     tile.onclick = (ev) => {
       if (ev.target && ev.target.tagName === "BUTTON") return;
-      const d = $("ready-details-" + o.id);
-      d.classList.toggle("hidden");
+      $("ready-details-" + o.id).classList.toggle("hidden");
     };
-
     list.appendChild(tile);
   }
 }
@@ -573,41 +710,35 @@ function renderCashierReady(){
 async function markTaken(orderId, orderNumber){
   if (!db) return;
   if (!confirm("Mark Order #" + orderNumber + " as TAKEN?")) return;
-  await db.collection("orders").doc(orderId).set({
-    status: "PICKED_UP",
-    pickedUpAtMs: Date.now(),
-    pickedUpAt: F.serverTimestamp()
-  }, { merge: true });
+  await db.collection("orders").doc(orderId).set({ status: "PICKED_UP", pickedUpAtMs: Date.now(), pickedUpAt: F.serverTimestamp() }, { merge: true });
   msg("Order #" + orderNumber + " picked up ✅");
 }
 
 function renderHistory(){
   const list = $("historyList");
   list.innerHTML = "";
-
+  const totalProfit = orders.reduce((s,o) => s + (Number(o.total) || 0), 0);
+  $("historyProfit").textContent = money(totalProfit);
   const sorted = [...orders].sort((a,b) => (b.createdAtMs||0) - (a.createdAtMs||0));
-
   for (const o of sorted){
     const tile = document.createElement("div");
     tile.className = "tile";
-
     const linesHtml = (o.lines || []).map(l =>
-      `<div class="row"><span>${l.qty}× ${l.name}</span><span>${money(l.price*l.qty)}</span></div>`
+      `<div class="row"><span>${l.qty}× ${esc(l.name)}</span><span>${money(l.price*l.qty)}</span></div>`
     ).join("");
-
     tile.innerHTML = `
       <div class="row">
         <div>
           <div style="font-weight:900">Order #${o.number} <span class="tiny">(${o.status})</span></div>
-          <div class="tiny">Total ${money(o.total)} • Paid ${money(o.paid)} • Change ${money(o.change)}</div>
+          <div class="tiny">${o.customerName ? esc(o.customerName) + ' • ' : ''}Total ${money(o.total)} • Paid ${money(o.paid)} • Change ${money(o.change)}</div>
         </div>
         <button class="ghost" style="width:auto;" onclick="toggleHist('${o.id}')">Details</button>
       </div>
       <div id="hist-details-${o.id}" class="hidden" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
         ${linesHtml}
+        ${detailExtra(o)}
       </div>
     `;
-
     list.appendChild(tile);
   }
 }
@@ -617,24 +748,185 @@ function toggleHist(orderId){
   if (d) d.classList.toggle("hidden");
 }
 
-/***********************
- * RESET DAY (delete all orders + reset counter)
- ***********************/
+function openActivity(which){
+  $("activitiesMenu").classList.add("hidden");
+  $("activitiesDarts").classList.toggle("hidden", which !== "darts");
+  $("activitiesAuction").classList.toggle("hidden", which !== "auction");
+  if (which === "darts") showDarts('main');
+  msg("Activity: " + which);
+}
+function backToActivities(){
+  $("activitiesMenu").classList.remove("hidden");
+  $("activitiesDarts").classList.add("hidden");
+  $("activitiesAuction").classList.add("hidden");
+}
+function showDarts(which){
+  $("dartsMain").classList.toggle("hidden", which !== "main");
+  $("dartsAdminView").classList.toggle("hidden", which !== "admin");
+  $("dartsHistoryView").classList.toggle("hidden", which !== "history");
+  if (which !== "admin"){ selectedPlayerId = null; pendingScore = 0; $("dartsScoreEntry").classList.add("hidden"); }
+}
+
+function renderDarts(){
+  const lb = [...dartsPlayers].sort((a,b) => (b.points||0) - (a.points||0));
+  $("dartsLeaderboard").innerHTML = lb.length
+    ? lb.map((p,i) => `<div class="tile"><div class="row"><div style="font-weight:900">#${i+1} ${esc(p.name)}</div><strong>${p.points||0} pts</strong></div>${p.item ? `<div class="tiny">${esc(p.item)}</div>` : ""}</div>`).join("")
+    : `<div class="mutedbox">No players yet.</div>`;
+
+  const active = dartsPlayers.filter(p => p.status !== "done").sort((a,b) => (a.createdAtMs||0) - (b.createdAtMs||0));
+  const al = $("dartsActiveList");
+  al.innerHTML = "";
+  if (active.length === 0){
+    al.innerHTML = `<div class="mutedbox">No active players.</div>`;
+  } else {
+    for (const p of active){
+      const t = document.createElement("div");
+      t.className = "tile";
+      t.innerHTML = `<div class="row"><div style="font-weight:900">${esc(p.name)}</div><strong>${p.points||0} pts</strong></div>${p.item ? `<div class="tiny">${esc(p.item)}</div>` : ""}`;
+      t.onclick = () => selectPlayer(p.id);
+      al.appendChild(t);
+    }
+  }
+
+  const done = dartsPlayers.filter(p => p.status === "done").sort((a,b) => (b.doneAtMs||0) - (a.doneAtMs||0));
+  $("dartsHistoryList").innerHTML = done.length
+    ? done.map(p => `<div class="tile"><div class="row"><div style="font-weight:900">${esc(p.name)}</div><strong>${p.points||0} pts</strong></div>${p.item ? `<div class="tiny">${esc(p.item)}</div>` : ""}</div>`).join("")
+    : `<div class="mutedbox">No history yet.</div>`;
+
+  if (selectedPlayerId){
+    if (dartsPlayers.find(x => x.id === selectedPlayerId)) renderScoreEntry();
+    else cancelScore();
+  }
+}
+
+function selectPlayer(id){ selectedPlayerId = id; pendingScore = 0; renderScoreEntry(); }
+
+function renderScoreEntry(){
+  const p = dartsPlayers.find(x => x.id === selectedPlayerId);
+  if (!p){ $("dartsScoreEntry").classList.add("hidden"); return; }
+  $("dartsScoreEntry").classList.remove("hidden");
+  $("scorePlayerName").textContent = p.name + " — " + (p.points||0) + " pts";
+  $("pendingScore").textContent = pendingScore;
+  const wrap = $("scoreButtons");
+  wrap.innerHTML = "";
+  for (const n of dartsButtons){
+    const b = document.createElement("button");
+    b.className = "scorebtn";
+    b.textContent = "+" + n;
+    b.onclick = () => { pendingScore += n; $("pendingScore").textContent = pendingScore; };
+    wrap.appendChild(b);
+  }
+}
+
+function resetPending(){ pendingScore = 0; $("pendingScore").textContent = 0; }
+function cancelScore(){ selectedPlayerId = null; pendingScore = 0; $("dartsScoreEntry").classList.add("hidden"); }
+
+async function saveDartsScore(){
+  if (!db || !selectedPlayerId) return;
+  const p = dartsPlayers.find(x => x.id === selectedPlayerId);
+  if (!p) return;
+  await db.collection("dartsPlayers").doc(selectedPlayerId).set({
+    points: (p.points || 0) + pendingScore, status: "done",
+    doneAtMs: Date.now(), doneAt: F.serverTimestamp()
+  }, { merge: true });
+  msg(`Saved ${pendingScore} pts for ${p.name} ✅`);
+  cancelScore();
+}
+
+async function addPlayer(){
+  if (!db) return alert("Not connected to Firebase.");
+  const name = $("newPlayerName").value.trim();
+  if (!name) { msg("Enter a player name"); return; }
+  await db.collection("dartsPlayers").add({ name, item: "", points: 0, status: "active", createdAtMs: Date.now(), createdAt: F.serverTimestamp() });
+  $("newPlayerName").value = "";
+  msg("Player added ✅");
+}
+
+async function editDartsButtons(){
+  if (!db) return alert("Not connected to Firebase.");
+  const input = prompt("Edit score buttons (comma separated numbers):", dartsButtons.join(", "));
+  if (input === null) return;
+  const arr = input.split(",").map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 0);
+  if (arr.length === 0) return alert("No valid numbers entered.");
+  await db.collection("meta").doc("dartsConfig").set({ buttons: arr }, { merge: true });
+  msg("Score buttons updated ✅");
+}
+
+async function createAuction(){
+  if (!db) return alert("Not connected to Firebase.");
+  const name = $("auctionName").value.trim();
+  const startPrice = Number($("auctionPrice").value);
+  const date = $("auctionDate").value;
+  const increment = Number($("auctionIncrement").value) || 1;
+  if (!name || !Number.isFinite(startPrice)) { msg("Missing auction name/price"); return; }
+  await db.collection("auctions").add({ name, startPrice, date, increment, currentPrice: startPrice, status: "PENDING", createdAtMs: Date.now(), createdAt: F.serverTimestamp() });
+  $("auctionName").value = ""; $("auctionPrice").value = ""; $("auctionDate").value = ""; $("auctionIncrement").value = "";
+  msg("Auction created ✅");
+}
+
+async function startAuction(id){
+  if (!db) return;
+  await db.collection("auctions").doc(id).set({ status: "RUNNING" }, { merge: true });
+  msg("Auction started ✅");
+}
+
+async function bidAuction(id){
+  if (!db) return;
+  const a = auctions.find(x => x.id === id);
+  if (!a) return;
+  await db.collection("auctions").doc(id).set({ currentPrice: (a.currentPrice || 0) + (a.increment || 1) }, { merge: true });
+}
+
+async function endAuction(id){
+  if (!db) return;
+  const a = auctions.find(x => x.id === id);
+  if (!a) return;
+  if (!confirm(`End "${a.name}" at ${money(a.currentPrice)} and go to payment?`)) return;
+  await db.collection("auctions").doc(id).set({ status: "ENDED", endedAtMs: Date.now() }, { merge: true });
+  openAuctionPay(a);
+}
+
+async function deleteAuction(id){
+  if (!db) return;
+  if (!confirm("Delete this auction?")) return;
+  await db.collection("auctions").doc(id).delete();
+  msg("Auction deleted");
+}
+
+function renderAuctions(){
+  const list = $("auctionList");
+  list.innerHTML = "";
+  const sorted = [...auctions].sort((a,b) => (b.createdAtMs||0) - (a.createdAtMs||0));
+  if (sorted.length === 0){ list.innerHTML = `<div class="mutedbox">No auctions yet.</div>`; return; }
+  for (const a of sorted){
+    let controls = "";
+    if (a.status === "PENDING") controls = `<button class="primary" style="width:auto;" onclick="startAuction('${a.id}')">Start</button>`;
+    else if (a.status === "RUNNING") controls = `<button class="qtybtn" onclick="bidAuction('${a.id}')">+ ${money(a.increment||1)}</button><button class="ghost danger" style="width:auto;" onclick="endAuction('${a.id}')">End</button>`;
+    else controls = `<span class="tiny">ENDED</span>`;
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.innerHTML = `
+      <div class="row">
+        <div><div style="font-weight:900">${esc(a.name)}</div><div class="tiny">${esc(a.date || "no date")} • ${a.status}</div></div>
+        <div style="font-weight:900;font-size:18px;">${money(a.currentPrice)}</div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div style="display:flex;gap:8px;align-items:center;">${controls}</div>
+        <button class="ghost" style="width:auto;" onclick="deleteAuction('${a.id}')">🗑</button>
+      </div>
+    `;
+    list.appendChild(tile);
+  }
+}
+
 async function resetDay(){
   if (!db) return alert("Not connected to Firebase.");
-
   if (!confirm("⚠️ RESET DAY will delete ALL orders and reset order numbers to 1.\n\nAre you absolutely sure?")) return;
-
   try {
-    // Delete all orders
     const snap = await db.collection("orders").get();
     const batch = db.batch();
     snap.forEach(doc => batch.delete(doc.ref));
-
-    // Reset counter
-    const counterRef = db.collection("meta").doc("counters");
-    batch.set(counterRef, { nextOrderNumber: 1 }, { merge: true });
-
+    batch.set(db.collection("meta").doc("counters"), { nextOrderNumber: 1 }, { merge: true });
     await batch.commit();
     msg("Day reset complete ✅");
     alert("All orders cleared. Order numbers reset to 1.");
@@ -645,70 +937,42 @@ async function resetDay(){
   }
 }
 
-/***********************
- * FIRESTORE LIVE SYNC
- ***********************/
 function startSync(){
   db.collection("items").orderBy("createdAtMs", "asc").onSnapshot(
-    (snap) => {
-      items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderMenu();
-      renderAdmin();
-      renderCart();
-    },
-    (err) => {
-      console.error(err);
-      setConn("Items sync error ❌");
-      msg(String(err.message || err));
-    }
+    (snap) => { items = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderMenu(); renderAdmin(); renderCart(); },
+    (err) => { console.error(err); setConn("Items sync error ❌"); msg(String(err.message || err)); }
   );
-
   db.collection("orders").orderBy("createdAtMs", "desc").onSnapshot(
-    (snap) => {
-      orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderCook();
-      renderCashierReady();
-      renderHistory();
-    },
-    (err) => {
-      console.error(err);
-      setConn("Orders sync error ❌");
-      msg(String(err.message || err));
-    }
+    (snap) => { orders = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderCook(); renderCashierReady(); renderHistory(); },
+    (err) => { console.error(err); setConn("Orders sync error ❌"); msg(String(err.message || err)); }
   );
-
+  db.collection("auctions").onSnapshot(
+    (snap) => { auctions = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderAuctions(); },
+    (err) => { console.error(err); msg("Auctions sync error: " + (err.message || err)); }
+  );
+  db.collection("dartsPlayers").onSnapshot(
+    (snap) => { dartsPlayers = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderDarts(); },
+    (err) => { console.error(err); msg("Darts sync error: " + (err.message || err)); }
+  );
+  db.collection("meta").doc("dartsConfig").onSnapshot(
+    (snap) => { if (snap.exists && Array.isArray(snap.data().buttons) && snap.data().buttons.length) dartsButtons = snap.data().buttons; renderDarts(); },
+    (err) => { console.error(err); }
+  );
   setConn("Connected ✅ (live sync)");
   msg("Sync started");
 }
 
-/***********************
- * BOOT
- ***********************/
 (function boot(){
   msg("Booting…");
-
   try {
-    if (!window.firebase) {
-      setConn("Firebase CDN blocked ❌");
-      msg("Network blocked gstatic.com (Firebase CDN).");
-      return;
-    }
+    if (!window.firebase) { setConn("Firebase CDN blocked ❌"); msg("Network blocked gstatic.com (Firebase CDN)."); return; }
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     F = firebase.firestore.FieldValue;
-
     startSync();
-
-    renderMenu();
-    renderCart();
-    renderCook();
-    renderCashierReady();
-    renderHistory();
-
+    renderMenu(); renderCart(); renderCook(); renderCashierReady(); renderHistory(); renderAuctions(); renderDarts();
     setConn("Connecting…");
-    setTimeout(() => {
-      if ($("connStatus").textContent === "Connecting…") setConn("Connected ✅ (live sync)");
-    }, 800);
+    setTimeout(() => { if ($("connStatus").textContent === "Connecting…") setConn("Connected ✅ (live sync)"); }, 800);
   } catch (e) {
     console.error(e);
     setConn("Firebase init error ❌");
