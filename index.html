@@ -35,7 +35,7 @@
     input, textarea { width:100%; box-sizing:border-box; padding:12px; border-radius:12px; border:1px solid #2a3042; background:#0b0c10; color:#eaf0ff; font-size:16px; font-family:inherit; }
 
     .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:14px; z-index:50; }
-    .modal-card { width:min(820px,100%); background:#11131a; border:1px solid #20243a; border-radius:14px; padding:14px; }
+    .modal-card { width:min(820px,100%); background:#11131a; border:1px solid #20243a; border-radius:14px; padding:14px; max-height:90vh; overflow-y:auto; }
     .row2 { display:flex; gap:10px; }
 
     .paywrap { max-width:560px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
@@ -52,6 +52,9 @@
     .scorebtn:active { outline:2px solid #7aa2ff; }
     label.check { display:flex; align-items:center; gap:8px; margin-top:10px; font-weight:700; }
     label.check input { width:auto; }
+    .warn { color:#ffb347; font-weight:700; }
+    .oos { opacity:.45; pointer-events:none; }
+    .stock-low { color:#ffb347; font-size:11px; }
   </style>
 
   <!-- Firebase (Compat) -->
@@ -133,6 +136,12 @@
             </div>
 
             <div>
+              <div class="tiny" style="margin-bottom:6px;">Customer allergies (optional, comma separated)</div>
+              <input id="payAllergies" placeholder="e.g. nuts, dairy, gluten" oninput="checkAllergies()">
+              <div id="allergyWarning" class="warn" style="margin-top:6px;min-height:18px;"></div>
+            </div>
+
+            <div>
               <div class="tiny" style="margin-bottom:6px;">Amount given</div>
               <input id="givenInput" type="number" inputmode="decimal" placeholder="0.00" oninput="updateChange()">
             </div>
@@ -184,7 +193,6 @@
 
     <!-- ACTIVITIES -->
     <section id="view-activities" class="hidden">
-      <!-- Activities menu -->
       <div id="activitiesMenu">
         <div class="pane">
           <div class="pane-head"><h2>Activities</h2></div>
@@ -197,7 +205,6 @@
 
       <!-- DARTS -->
       <div id="activitiesDarts" class="hidden">
-        <!-- darts main / leaderboard -->
         <div id="dartsMain">
           <div class="pane">
             <div class="pane-head">
@@ -214,7 +221,6 @@
           </div>
         </div>
 
-        <!-- darts admin -->
         <div id="dartsAdminView" class="hidden">
           <div class="pane">
             <div class="pane-head">
@@ -224,15 +230,12 @@
                 <button class="ghost" style="width:auto;" onclick="editDartsButtons()">Edit buttons ✏️</button>
               </div>
             </div>
-
             <div class="row2" style="margin-bottom:10px;">
               <input id="newPlayerName" placeholder="Add player name" />
               <button class="ghost" style="width:auto;" onclick="addPlayer()">Add</button>
             </div>
-
             <div class="tiny" style="margin-bottom:6px;">Tap a player to score</div>
             <div id="dartsActiveList" class="list"></div>
-
             <div id="dartsScoreEntry" class="hidden" style="margin-top:14px;">
               <hr style="border:none;border-top:1px solid #20243a;margin:0 0 12px 0;">
               <h3 id="scorePlayerName" style="margin:0 0 8px 0;"></h3>
@@ -250,7 +253,6 @@
           </div>
         </div>
 
-        <!-- darts history -->
         <div id="dartsHistoryView" class="hidden">
           <div class="pane">
             <div class="pane-head">
@@ -269,7 +271,6 @@
             <h2>Auctions</h2>
             <button class="ghost" style="width:auto;" onclick="backToActivities()">Back</button>
           </div>
-
           <div class="row2">
             <input id="auctionName" placeholder="Auction name" />
             <input id="auctionPrice" type="number" inputmode="decimal" placeholder="Start price" />
@@ -281,7 +282,6 @@
           <div style="margin-top:10px;">
             <button class="primary" onclick="createAuction()">Create auction</button>
           </div>
-
           <hr style="border:none;border-top:1px solid #20243a;margin:14px 0;">
           <div id="auctionList" class="list"></div>
         </div>
@@ -296,23 +296,23 @@
         <h2 style="margin:0;">Items</h2>
         <button class="ghost" style="width:auto;" onclick="closeItems()">Close</button>
       </div>
-
       <div class="row2">
         <input id="newItemName" placeholder="Name" />
         <input id="newItemPrice" type="number" inputmode="decimal" placeholder="Price" />
       </div>
       <input id="newItemNotes" placeholder="Notes (optional)" style="margin-top:10px;" />
-
+      <div class="row2" style="margin-top:10px;">
+        <input id="newItemStock" type="number" inputmode="numeric" placeholder="Stock (servings, blank = unlimited)" />
+        <input id="newItemAllergies" placeholder="Allergens (e.g. nuts, dairy)" />
+      </div>
       <label class="check">
         <input type="checkbox" id="newItemActivity" />
         Send to Activity Manager (Darts) instead of Cooks
       </label>
-
       <div style="margin-top:12px;" class="row2">
         <button class="primary" id="itemSaveBtn" onclick="saveItem()">Add item</button>
         <button class="ghost" id="itemCancelEdit" style="width:auto;display:none;" onclick="cancelItemEdit()">Cancel</button>
       </div>
-
       <hr style="border:none;border-top:1px solid #20243a;margin:14px 0;">
       <div id="itemsAdminList" class="list"></div>
     </div>
@@ -384,18 +384,24 @@ async function saveItem(){
   const price = Number($("newItemPrice").value);
   const notes = $("newItemNotes").value.trim();
   const toActivity = $("newItemActivity").checked;
+  const stockRaw = $("newItemStock").value.trim();
+  const stock = stockRaw !== "" ? Number(stockRaw) : null;
+  const allergies = $("newItemAllergies").value.trim();
   if (!name || !Number.isFinite(price)) { msg("Missing name/price"); return; }
+  const data = { name, price, notes, toActivity, allergies, stock };
   if (editItemId){
-    await db.collection("items").doc(editItemId).set({ name, price, notes, toActivity }, { merge: true });
+    await db.collection("items").doc(editItemId).set(data, { merge: true });
     msg("Item updated ✅");
     cancelItemEdit();
   } else {
-    await db.collection("items").add({ name, price, notes, toActivity, createdAtMs: Date.now(), createdAt: F.serverTimestamp() });
+    await db.collection("items").add({ ...data, createdAtMs: Date.now(), createdAt: F.serverTimestamp() });
     msg("Item added ✅");
   }
   $("newItemName").value = "";
   $("newItemPrice").value = "";
   $("newItemNotes").value = "";
+  $("newItemStock").value = "";
+  $("newItemAllergies").value = "";
   $("newItemActivity").checked = false;
 }
 
@@ -406,6 +412,8 @@ function editItemStart(itemId){
   $("newItemName").value = it.name || "";
   $("newItemPrice").value = it.price != null ? it.price : "";
   $("newItemNotes").value = it.notes || "";
+  $("newItemStock").value = it.stock != null ? it.stock : "";
+  $("newItemAllergies").value = it.allergies || "";
   $("newItemActivity").checked = !!it.toActivity;
   $("itemSaveBtn").textContent = "Save changes";
   $("itemCancelEdit").style.display = "";
@@ -419,6 +427,8 @@ function cancelItemEdit(){
   $("newItemName").value = "";
   $("newItemPrice").value = "";
   $("newItemNotes").value = "";
+  $("newItemStock").value = "";
+  $("newItemAllergies").value = "";
   $("newItemActivity").checked = false;
 }
 
@@ -436,9 +446,16 @@ function renderMenu(){
   const grid = $("itemsGrid");
   grid.innerHTML = "";
   for (const it of items){
+    const oos = it.stock != null && it.stock <= 0;
+    const stockLabel = it.stock != null
+      ? (oos ? `<div style="color:#ff8a8a;font-size:11px;font-weight:700;">OUT OF STOCK</div>`
+             : `<div class="stock-low">${it.stock} left</div>`)
+      : "";
     const tile = document.createElement("div");
-    tile.className = "tile";
-    tile.innerHTML = `<div style="font-weight:900">${esc(it.name)}</div><div class="tiny">${money(it.price)}${it.toActivity ? " • 🎯 Activity" : ""}</div>`;
+    tile.className = "tile" + (oos ? " oos" : "");
+    tile.innerHTML = `<div style="font-weight:900">${esc(it.name)}</div>
+      <div class="tiny">${money(it.price)}${it.toActivity ? " • 🎯 Activity" : ""}</div>
+      ${stockLabel}`;
     tile.onclick = () => addToCart(it.id);
     grid.appendChild(tile);
   }
@@ -448,13 +465,15 @@ function renderAdmin(){
   const list = $("itemsAdminList");
   list.innerHTML = "";
   for (const it of items){
+    const stockTxt = it.stock != null ? ` • Stock: ${it.stock}` : "";
+    const allergyTxt = it.allergies ? ` • ⚠️ ${esc(it.allergies)}` : "";
     const tile = document.createElement("div");
     tile.className = "tile";
     tile.innerHTML = `
       <div class="row">
         <div>
           <div style="font-weight:900">${esc(it.name)}</div>
-          <div class="tiny">${esc(it.notes || "")}${it.toActivity ? " • 🎯 Activity" : ""}</div>
+          <div class="tiny">${esc(it.notes || "")}${it.toActivity ? " • 🎯 Activity" : ""}${stockTxt}${allergyTxt}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <div style="font-weight:900">${money(it.price)}</div>
@@ -468,9 +487,10 @@ function renderAdmin(){
 }
 
 function addToCart(itemId){
+  const it = items.find(x => x.id === itemId);
+  if (it && it.stock != null && it.stock <= 0){ msg("Out of stock: " + it.name); return; }
   cart.set(itemId, (cart.get(itemId) || 0) + 1);
   renderCart();
-  const it = items.find(x => x.id === itemId);
   msg("Added to cart: " + (it ? it.name : itemId));
 }
 function incQty(itemId){
@@ -548,6 +568,8 @@ function openPay(){
   $("givenInput").value = "";
   $("payName").value = payOverride ? payOverride.name : "";
   $("payNotes").value = "";
+  $("payAllergies").value = "";
+  $("allergyWarning").textContent = "";
   $("dueAmt").textContent = money(due);
   $("changeAmt").textContent = money(0);
   $("cashierMain").classList.add("hidden");
@@ -567,6 +589,26 @@ function updateChange(){
   $("changeAmt").textContent = money(Math.max(0, change));
 }
 
+function checkAllergies(){
+  const warn = $("allergyWarning");
+  const custText = $("payAllergies").value.trim();
+  if (!custText){ warn.textContent = ""; return; }
+  const custList = custText.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  const matches = [];
+  for (const [itemId] of cart.entries()){
+    const it = items.find(x => x.id === itemId);
+    if (!it || it.toActivity || !it.allergies) continue;
+    const itemAllergens = it.allergies.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    for (const a of custList){
+      if (itemAllergens.includes(a)){
+        const label = `${it.name} contains ${a}`;
+        if (!matches.includes(label)) matches.push(label);
+      }
+    }
+  }
+  warn.textContent = matches.length ? "⚠️ ALLERGY WARNING: " + matches.join(" | ") : "";
+}
+
 async function completePay(){
   if (!db) return alert("Not connected to Firebase yet.");
   const due = payOverride ? payOverride.amount : cartTotal();
@@ -579,6 +621,7 @@ async function completePay(){
   if (!confirm("Complete payment?")) return;
   const customerName = $("payName").value.trim();
   const notes = $("payNotes").value.trim();
+  const allergies = $("payAllergies").value.trim();
   let lines = [];
   if (payOverride){
     lines = payOverride.lines;
@@ -604,15 +647,31 @@ async function completePay(){
         number: next,
         status: cookLines.length > 0 ? "COOKING" : "ACTIVITY",
         lines, total: due, paid: given, change: given - due,
-        customerName, notes, createdAtMs,
+        customerName, notes, allergies, createdAtMs,
         createdAt: F.serverTimestamp(),
         readyAtMs: null, readyAt: null, pickedUpAtMs: null, pickedUpAt: null
       });
     });
-    for (const l of activityLines){
-      for (let i = 0; i < (l.qty || 1); i++){
+    // Decrement stock for non-activity items
+    for (const l of cookLines){
+      if (!l.itemId) continue;
+      const it = items.find(x => x.id === l.itemId);
+      if (it && it.stock != null){
+        await db.collection("items").doc(l.itemId).update({ stock: F.increment(-(l.qty)) });
+      }
+    }
+    // Activity items -> add/update darts player (dedup by name)
+    if (activityLines.length > 0){
+      const playerName = customerName || "Guest";
+      const existing = dartsPlayers.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+      if (existing){
+        if (existing.status === "done"){
+          await db.collection("dartsPlayers").doc(existing.id).set({ status: "active" }, { merge: true });
+        }
+      } else {
         await db.collection("dartsPlayers").add({
-          name: customerName || "Guest", item: l.name || "",
+          name: playerName,
+          item: activityLines.map(l => l.name).join(", "),
           points: 0, status: "active",
           createdAtMs: Date.now(), createdAt: F.serverTimestamp()
         });
@@ -633,6 +692,7 @@ function detailExtra(o){
   let s = "";
   if (o.customerName) s += `<div class="row"><span>Name</span><strong>${esc(o.customerName)}</strong></div>`;
   if (o.notes) s += `<div class="mutedbox">📝 ${esc(o.notes)}</div>`;
+  if (o.allergies) s += `<div class="mutedbox warn">⚠️ Allergies: ${esc(o.allergies)}</div>`;
   return s;
 }
 
@@ -921,15 +981,19 @@ function renderAuctions(){
 
 async function resetDay(){
   if (!db) return alert("Not connected to Firebase.");
-  if (!confirm("⚠️ RESET DAY will delete ALL orders and reset order numbers to 1.\n\nAre you absolutely sure?")) return;
+  if (!confirm("⚠️ RESET DAY will delete ALL orders and darts players, and reset order numbers to 1.\n\nAre you absolutely sure?")) return;
   try {
-    const snap = await db.collection("orders").get();
+    const [ordersSnap, dartsSnap] = await Promise.all([
+      db.collection("orders").get(),
+      db.collection("dartsPlayers").get()
+    ]);
     const batch = db.batch();
-    snap.forEach(doc => batch.delete(doc.ref));
+    ordersSnap.forEach(doc => batch.delete(doc.ref));
+    dartsSnap.forEach(doc => batch.delete(doc.ref));
     batch.set(db.collection("meta").doc("counters"), { nextOrderNumber: 1 }, { merge: true });
     await batch.commit();
     msg("Day reset complete ✅");
-    alert("All orders cleared. Order numbers reset to 1.");
+    alert("All orders and darts players cleared. Order numbers reset to 1.");
   } catch (e) {
     console.error(e);
     alert("Reset failed. Check connection or rules.");
